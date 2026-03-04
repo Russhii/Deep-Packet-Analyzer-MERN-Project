@@ -167,7 +167,7 @@ const AnalysisReport = () => {
         <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6 border border-white/20">
           <h2 className="text-xl font-semibold text-white mb-4 flex items-center space-x-2">
             <BarChart3 className="w-5 h-5" />
-            <span>Application Breakdown</span>
+            <span>Application Breakdown (SNI-Based)</span>
           </h2>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
@@ -190,7 +190,46 @@ const AnalysisReport = () => {
           </ResponsiveContainer>
         </div>
 
-        {/* Detected Domains */}
+        {/* ML Traffic Classification */}
+        <div className="bg-gradient-to-br from-cyan-600/20 to-blue-600/20 backdrop-blur-lg rounded-lg p-6 border border-cyan-500/30">
+          <h2 className="text-xl font-semibold text-white mb-4 flex items-center space-x-2">
+            <BarChart3 className="w-5 h-5" />
+            <span>🤖 ML Traffic Classification</span>
+          </h2>
+          {report.ml_category_breakdown ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={Object.entries(report.ml_category_breakdown).map(([name, value]) => ({
+                    name,
+                    value,
+                  }))}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {Object.keys(report.ml_category_breakdown).map((key, index) => (
+                    <Cell key={`cell-ml-${index}`} fill={COLORS[(index + 2) % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="text-gray-400 text-center py-4">ML classification not available</p>
+          )}
+          <div className="mt-4 text-sm text-cyan-300">
+            ✨ Machine Learning classifies traffic by behavior patterns
+          </div>
+        </div>
+      </div>
+
+      {/* Detected Domains & Feature Importance */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6 border border-white/20">
           <h2 className="text-xl font-semibold text-white mb-4 flex items-center space-x-2">
             <Globe className="w-5 h-5" />
@@ -209,6 +248,42 @@ const AnalysisReport = () => {
                 </div>
               ))
             )}
+          </div>
+        </div>
+
+        {/* ML Feature Importance */}
+        <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6 border border-white/20">
+          <h2 className="text-xl font-semibold text-white mb-4 flex items-center space-x-2">
+            <BarChart3 className="w-5 h-5" />
+            <span>🧠 ML Feature Importance</span>
+          </h2>
+          {report.ml_feature_importance ? (
+            <div className="space-y-3 max-h-80 overflow-y-auto">
+              {Object.entries(report.ml_feature_importance)
+                .sort(([, a], [, b]) => b - a)
+                .slice(0, 8)
+                .map(([feature, importance], index) => (
+                  <div key={index}>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-300 capitalize">
+                        {feature.replace(/_/g, " ")}
+                      </span>
+                      <span className="text-cyan-400">{(importance * 100).toFixed(1)}%</span>
+                    </div>
+                    <div className="w-full bg-white/10 rounded-full h-2">
+                      <div
+                        className="bg-gradient-to-r from-cyan-500 to-blue-500 h-2 rounded-full transition-all"
+                        style={{ width: `${importance * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+            </div>
+          ) : (
+            <p className="text-gray-400 text-center py-4">Feature importance not available</p>
+          )}
+          <div className="mt-4 text-sm text-gray-400">
+            Shows which features the ML model considers most important for classification
           </div>
         </div>
       </div>
@@ -244,6 +319,7 @@ const AnalysisReport = () => {
                 <th className="pb-3 text-gray-300 font-medium">Destination</th>
                 <th className="pb-3 text-gray-300 font-medium">Protocol</th>
                 <th className="pb-3 text-gray-300 font-medium">App</th>
+                <th className="pb-3 text-gray-300 font-medium">ML Category</th>
                 <th className="pb-3 text-gray-300 font-medium">SNI/Host</th>
                 <th className="pb-3 text-gray-300 font-medium">Packets</th>
                 <th className="pb-3 text-gray-300 font-medium">Status</th>
@@ -263,6 +339,18 @@ const AnalysisReport = () => {
                     <span className="px-2 py-1 bg-purple-500/20 text-purple-400 rounded text-sm">
                       {flow.app_type}
                     </span>
+                  </td>
+                  <td className="py-3">
+                    <div className="flex flex-col">
+                      <span className="px-2 py-1 bg-cyan-500/20 text-cyan-400 rounded text-sm inline-block">
+                        🤖 {flow.ml_category || "Unknown"}
+                      </span>
+                      {flow.ml_confidence && (
+                        <span className="text-xs text-gray-400 mt-1">
+                          {(flow.ml_confidence * 100).toFixed(0)}% confidence
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="py-3 text-gray-300 max-w-xs truncate">
                     {flow.sni || "-"}

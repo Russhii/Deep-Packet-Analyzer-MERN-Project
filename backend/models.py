@@ -49,6 +49,10 @@ class Flow(BaseModel):
     blocked: bool = False
     first_seen: Optional[datetime] = None
     last_seen: Optional[datetime] = None
+    # ML Classification fields
+    ml_category: Optional[str] = None
+    ml_confidence: Optional[float] = None
+    ml_probabilities: Optional[Dict[str, float]] = None
 
 class AnalysisReport(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -62,6 +66,9 @@ class AnalysisReport(BaseModel):
     app_breakdown: Dict[str, int] = {}
     detected_domains: List[str] = []
     analysis_time: datetime = Field(default_factory=datetime.utcnow)
+    # ML Classification stats
+    ml_category_breakdown: Optional[Dict[str, int]] = None
+    ml_feature_importance: Optional[Dict[str, float]] = None
 
 class BlockingRule(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))

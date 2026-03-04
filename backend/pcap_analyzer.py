@@ -2,6 +2,7 @@ from scapy.all import rdpcap, IP, TCP, UDP, Raw
 from typing import Dict, List, Tuple, Optional
 from models import AppType, Flow, AnalysisReport
 from dpi_engine import SNIExtractor, AppClassifier, RuleEngine
+from ml_classifier import MLTrafficClassifier
 from datetime import datetime
 import logging
 
@@ -13,6 +14,7 @@ class PcapAnalyzer:
         self.capture_id = capture_id
         self.flows: Dict[Tuple, Dict] = {}
         self.rule_engine = RuleEngine(rules or [])
+        self.ml_classifier = MLTrafficClassifier()
         self.stats = {
             'total_packets': 0,
             'total_bytes': 0,
@@ -21,7 +23,8 @@ class PcapAnalyzer:
             'forwarded': 0,
             'dropped': 0,
             'app_breakdown': {},
-            'detected_domains': set()
+            'detected_domains': set(),
+            'ml_category_breakdown': {}
         }
     
     def analyze(self) -> Tuple[List[Flow], AnalysisReport]:
@@ -95,13 +98,18 @@ class PcapAnalyzer:
                 'byte_count': 0,
                 'blocked': False,
                 'first_seen': datetime.utcnow(),
-                'last_seen': datetime.utcnow()
+                'last_seen': datetime.utcnow(),
+                'packet_sizes': [],
+                'ml_category': None,
+                'ml_confidence': 0.0,
+                'ml_probabilities': {}
             }
         
         flow = self.flows[five_tuple]
         flow['packet_count'] += 1
         flow['byte_count'] += len(packet)
         flow['last_seen'] = datetime.utcnow()
+        flow['packet_sizes'].append(len(packet))
         
         # Try to extract SNI if not already found
         if flow['sni'] is None and packet.haslayer(Raw):
@@ -147,9 +155,18 @@ class PcapAnalyzer:
         self.stats['app_breakdown'][app_name] = self.stats['app_breakdown'].get(app_name, 0) + 1
     
     def _create_flow_list(self) -> List[Flow]:
-        """Convert internal flow dict to Flow objects"""
+        """Convert internal flow dict to Flow objects with ML classification"""
         flow_list = []
+        logger.info("Running ML classification on flows...")
+        
         for five_tuple, flow_data in self.flows.items():
+            # Run ML classification
+            ml_category, ml_confidence, ml_probabilities = self.ml_classifier.classify(flow_data)
+            
+            # Update stats
+            self.stats['ml_category_breakdown'][ml_category] = \
+                self.stats['ml_category_breakdown'].get(ml_category, 0) + 1
+            
             flow = Flow(
                 capture_id=self.capture_id,
                 src_ip=flow_data['src_ip'],
@@ -163,13 +180,20 @@ class PcapAnalyzer:
                 byte_count=flow_data['byte_count'],
                 blocked=flow_data['blocked'],
                 first_seen=flow_data['first_seen'],
-                last_seen=flow_data['last_seen']
+                last_seen=flow_data['last_seen'],
+                ml_category=ml_category,
+                ml_confidence=ml_confidence,
+                ml_probabilities=ml_probabilities
             )
             flow_list.append(flow)
+        
+        logger.info(f"ML classification complete. Categories: {self.stats['ml_category_breakdown']}")
         return flow_list
     
     def _create_report(self) -> AnalysisReport:
-        """Create analysis report"""
+        """Create analysis report with ML insights"""
+        feature_importance = self.ml_classifier.get_feature_importance()
+        
         return AnalysisReport(
             capture_id=self.capture_id,
             total_packets=self.stats['total_packets'],
@@ -179,5 +203,7 @@ class PcapAnalyzer:
             forwarded=self.stats['forwarded'],
             dropped=self.stats['dropped'],
             app_breakdown=self.stats['app_breakdown'],
-            detected_domains=sorted(list(self.stats['detected_domains']))
+            detected_domains=sorted(list(self.stats['detected_domains'])),
+            ml_category_breakdown=self.stats['ml_category_breakdown'],
+            ml_feature_importance=feature_importance
         )
